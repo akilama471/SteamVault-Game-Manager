@@ -1,0 +1,5 @@
+{
+  "name": "SteamVault Game Manager",
+  "description": "A modern, mobile-friendly dark-themed game listing application. Features an Admin Panel for managing games using Steam Storefront integration and a sleek Visitor Panel for browsing titles.",
+  "requestFramePermissions": []
+}

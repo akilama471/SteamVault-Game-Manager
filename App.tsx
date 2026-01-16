@@ -4,7 +4,6 @@ import { Game, ViewMode, RequirementTemplate } from './types';
 import { AdminPanel } from './components/AdminPanel';
 import { GameCard } from './components/GameCard';
 import { GameModal } from './components/GameModal';
-import { Button } from './components/Button';
 import { LoginForm } from './components/LoginForm';
 import { Footer } from './components/Footer';
 import { 
@@ -29,419 +28,194 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'offline' | 'error'>('synced');
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
-  // Auth Subscription
   useEffect(() => {
-    const unsubscribe = subscribeToAuth((user) => {
-      setCurrentUser(user);
-    });
+    const unsubscribe = subscribeToAuth((user) => setCurrentUser(user));
     return () => unsubscribe();
   }, []);
 
-  // Data Loading
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      
       if (isFirebaseConfigured) {
         try {
           const [gamesResult, templatesResult] = await Promise.allSettled([
             cloudFetchGames(),
             cloudFetchTemplates()
           ]);
-          
-          let gamesLoadSuccess = false;
-          let templatesLoadSuccess = false;
-          let permissionDenied = false;
-
-          if (gamesResult.status === 'fulfilled' && gamesResult.value) {
-            setGames(gamesResult.value as Game[]);
-            gamesLoadSuccess = true;
-          } else if (gamesResult.status === 'rejected') {
-            console.warn("Games collection failed to load:", gamesResult.reason);
-            if ((gamesResult.reason as any).code === 'permission-denied') permissionDenied = true;
-          }
-
-          if (templatesResult.status === 'fulfilled' && templatesResult.value) {
-            setTemplates(templatesResult.value as RequirementTemplate[]);
-            templatesLoadSuccess = true;
-          } else if (templatesResult.status === 'rejected') {
-            console.warn("Templates collection failed to load:", templatesResult.reason);
-            if ((templatesResult.reason as any).code === 'permission-denied') permissionDenied = true;
-          }
-          
-          if (!gamesLoadSuccess && permissionDenied) {
-            setSyncStatus('error');
-          } else if (!gamesLoadSuccess && !templatesLoadSuccess) {
-            setSyncStatus('offline');
-          } else {
-            setSyncStatus('synced');
-          }
-          
+          if (gamesResult.status === 'fulfilled' && gamesResult.value) setGames(gamesResult.value as Game[]);
+          if (templatesResult.status === 'fulfilled' && templatesResult.value) setTemplates(templatesResult.value as RequirementTemplate[]);
+          setSyncStatus('synced');
           setIsLoading(false);
           return;
-        } catch (e: any) {
-          console.error("General Sync Error:", e);
+        } catch (e) {
           setSyncStatus('offline');
         }
       }
-
-      const savedGames = localStorage.getItem('steam_vault_games');
-      const savedTemplates = localStorage.getItem('steam_vault_templates');
-      if (savedGames) setGames(JSON.parse(savedGames));
-      if (savedTemplates) setTemplates(JSON.parse(savedTemplates));
-      
       setIsLoading(false);
     };
-
     loadData();
   }, []);
 
-  const saveTemplates = async (newTemplates: RequirementTemplate[]) => {
-    setTemplates(newTemplates);
-    localStorage.setItem('steam_vault_templates', JSON.stringify(newTemplates));
-  };
-
-  const addGame = async (game: Game) => {
-    const newGames = [game, ...games];
-    setGames(newGames);
-    localStorage.setItem('steam_vault_games', JSON.stringify(newGames));
-    try { await cloudSaveGame(game); } catch (e) { throw e; }
-  };
-
-  const editGame = async (updatedGame: Game) => {
-    const newGames = games.map(g => g.id === updatedGame.id ? updatedGame : g);
-    setGames(newGames);
-    localStorage.setItem('steam_vault_games', JSON.stringify(newGames));
-    try { await cloudSaveGame(updatedGame); } catch (e) { throw e; }
-  };
-
-  const deleteGame = async (id: string) => {
-    const newGames = games.filter(g => g.id !== id);
-    setGames(newGames);
-    localStorage.setItem('steam_vault_games', JSON.stringify(newGames));
-    try { await cloudDeleteGame(id); } catch (e) { throw e; }
-  };
-
-  const handleAddTemplate = async (label: string) => {
-    const newTemplate = { id: Date.now().toString(), label };
-    const newTemplates = [...templates, newTemplate];
-    saveTemplates(newTemplates);
-    try { 
-      await cloudSaveTemplate(newTemplate); 
-      setSyncStatus('synced');
-    } catch (e: any) {
-      if (e.code === 'permission-denied') setSyncStatus('error');
-    }
-  };
-
-  const handleDeleteTemplate = async (id: string) => {
-    const newTemplates = templates.filter(t => t.id !== id);
-    saveTemplates(newTemplates);
-    try { 
-      await cloudDeleteTemplate(id); 
-      setSyncStatus('synced');
-    } catch (e: any) {
-      if (e.code === 'permission-denied') setSyncStatus('error');
-    }
-  };
-
-  const toggleReqId = (id: string) => {
-    setSelectedReqIds(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+  const parseValue = (label: string): number => {
+    const match = label.toLowerCase().match(/(\d+(?:\.\d+)?)\s*(gb|mb)/);
+    if (!match) return 0;
+    let val = parseFloat(match[1]);
+    return match[2] === 'mb' ? val / 1024 : val;
   };
 
   const groupedTemplates = useMemo(() => {
-    const ram: RequirementTemplate[] = [];
-    const vga: RequirementTemplate[] = [];
-    const others: RequirementTemplate[] = [];
-
-    const sortLabels = (a: RequirementTemplate, b: RequirementTemplate) => {
-      const numA = parseInt(a.label.match(/\d+/)?.[0] || '0');
-      const numB = parseInt(b.label.match(/\d+/)?.[0] || '0');
-      return numA - numB;
-    };
-
-    templates.forEach(t => {
-      const label = t.label.toLowerCase();
-      // Use robust regex to match memory/vga labels consistently
-      const isRam = label.includes('ram') || (/\d+\s*gb/.test(label) && !label.includes('vga') && !label.includes('gpu'));
-      const isVga = label.includes('vga') || label.includes('gpu') || label.includes('graphics');
-
-      if (isRam) ram.push(t);
-      else if (isVga) vga.push(t);
-      else others.push(t);
-    });
-
-    return { 
-      ram: ram.sort(sortLabels), 
-      vga: vga.sort(sortLabels), 
-      others 
-    };
+    const ram = templates.filter(t => t.category === 'ram').sort((a, b) => parseValue(a.label) - parseValue(b.label));
+    const vga = templates.filter(t => t.category === 'vga').sort((a, b) => parseValue(a.label) - parseValue(b.label));
+    const others = templates.filter(t => t.category === 'others');
+    return { ram, vga, others };
   }, [templates]);
 
   const filteredGames = useMemo(() => {
+    const query = searchTerm.toLowerCase().trim();
     return games.filter(g => {
-      const matchesSearch = g.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const hasAnyRequirements = (g.requirementIds?.length || 0) > 0;
-      
-      if (onlyWithRequirements && !hasAnyRequirements) return false;
+      if (query && !g.name.toLowerCase().includes(query)) return false;
+      const gameReqs = g.requirementIds || [];
+      if (onlyWithRequirements && gameReqs.length === 0) return false;
 
       if (selectedReqIds.length > 0) {
-        const gameReqs = g.requirementIds || [];
-        
-        // Group selected IDs by category to apply OR within category and AND across
-        const selectedRam = selectedReqIds.filter(id => groupedTemplates.ram.some(t => t.id === id));
-        const selectedVga = selectedReqIds.filter(id => groupedTemplates.vga.some(t => t.id === id));
-        const selectedOthers = selectedReqIds.filter(id => groupedTemplates.others.some(t => t.id === id));
+        // RAM Threshold Logic
+        const selRam = groupedTemplates.ram.filter(t => selectedReqIds.includes(t.id));
+        if (selRam.length > 0) {
+          const userMax = Math.max(...selRam.map(t => parseValue(t.label)));
+          const gRam = groupedTemplates.ram.filter(t => gameReqs.includes(t.id));
+          if (gRam.length > 0) {
+            const gMin = Math.min(...gRam.map(t => parseValue(t.label)));
+            if (gMin > userMax) return false;
+          } else if (onlyWithRequirements) return false;
+        }
 
-        const matchesRam = selectedRam.length === 0 || selectedRam.some(id => gameReqs.includes(id));
-        const matchesVga = selectedVga.length === 0 || selectedVga.some(id => gameReqs.includes(id));
-        const matchesOthers = selectedOthers.length === 0 || selectedOthers.some(id => gameReqs.includes(id));
+        // VGA Threshold Logic
+        const selVga = groupedTemplates.vga.filter(t => selectedReqIds.includes(t.id));
+        if (selVga.length > 0) {
+          const userMax = Math.max(...selVga.map(t => parseValue(t.label)));
+          const gVga = groupedTemplates.vga.filter(t => gameReqs.includes(t.id));
+          if (gVga.length > 0) {
+            const gMin = Math.min(...gVga.map(t => parseValue(t.label)));
+            if (userMax > 0 && gMin > 0 && gMin > userMax) return false;
+            if (gMin === 0 && !selVga.some(t => gameReqs.includes(t.id))) return false;
+          } else if (onlyWithRequirements) return false;
+        }
 
-        if (!(matchesRam && matchesVga && matchesOthers)) return false;
+        // Others: OR Logic
+        const selOther = selectedReqIds.filter(id => groupedTemplates.others.some(t => t.id === id));
+        if (selOther.length > 0 && !selOther.some(id => gameReqs.includes(id))) return false;
       }
-
-      return matchesSearch;
+      return true;
     });
   }, [games, searchTerm, selectedReqIds, onlyWithRequirements, groupedTemplates]);
 
+  const FilterPanel = () => (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em]">Compatibility</h3>
+        {selectedReqIds.length > 0 && <button onClick={() => setSelectedReqIds([])} className="text-[10px] text-indigo-400 font-bold">Reset</button>}
+      </div>
+      <div className="space-y-6">
+        {[
+          { title: "Memory", tags: groupedTemplates.ram, color: "bg-indigo-500" },
+          { title: "Graphics", tags: groupedTemplates.vga, color: "bg-emerald-500" },
+          { title: "Features", tags: groupedTemplates.others, color: "bg-amber-500" }
+        ].map(s => (
+          <div key={s.title} className="space-y-3">
+            <h4 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2">
+              <span className={`w-1 h-1 rounded-full ${s.color}`} /> {s.title}
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {s.tags.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setSelectedReqIds(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${selectedReqIds.includes(t.id) ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col bg-zinc-950">
+      {/* Mobile Drawer */}
+      <div className={`fixed inset-0 z-[100] transition-opacity duration-300 ${isFilterDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsFilterDrawerOpen(false)} />
+        <div className={`absolute left-0 top-0 bottom-0 w-80 bg-zinc-950 border-r border-zinc-800 shadow-2xl transition-transform duration-300 transform ${isFilterDrawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="p-6 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+              <h2 className="text-xl font-bold text-white">Filters</h2>
+              <button onClick={() => setIsFilterDrawerOpen(false)} className="p-2 text-zinc-500 hover:text-white"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg></button>
+            </div>
+            <div className="flex-1 overflow-y-auto"><FilterPanel /></div>
+          </div>
+        </div>
+      </div>
+
       <nav className="sticky top-0 z-40 bg-zinc-950/80 backdrop-blur-lg border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent leading-none">
-                SteamVault
-              </h1>
-              {syncStatus !== 'synced' && (
-                <span className={`text-[9px] font-bold uppercase tracking-tighter ${syncStatus === 'error' ? 'text-red-500' : 'text-zinc-500'}`}>
-                  {syncStatus === 'error' ? 'Sync Permission Error' : 'Local Only'}
-                </span>
-              )}
-            </div>
+            <h1 className="text-xl font-bold tracking-tight text-white">SteamVault</h1>
           </div>
-
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center bg-zinc-900 border border-zinc-800 rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/50 transition-all">
-              <svg className="w-4 h-4 text-zinc-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-              <input 
-                type="text" 
-                placeholder="Search catalog..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-transparent border-none text-sm outline-none w-40 md:w-64 text-white"
-              />
+            <div className="hidden sm:flex items-center bg-zinc-900 border border-zinc-800 rounded-full px-4 py-1.5 focus-within:ring-2 focus-within:ring-indigo-500/30 transition-all">
+              <input type="text" placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent border-none text-xs outline-none w-48 text-white" />
             </div>
-            
-            <div className="flex items-center bg-zinc-900 p-1 rounded-lg border border-zinc-800">
-              <button 
-                onClick={() => setViewMode(ViewMode.VISITOR)}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === ViewMode.VISITOR ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Store
-              </button>
-              <button 
-                onClick={() => setViewMode(ViewMode.ADMIN)}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === ViewMode.ADMIN ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
-              >
-                Admin
-              </button>
-            </div>
+            <button onClick={() => setViewMode(viewMode === ViewMode.VISITOR ? ViewMode.ADMIN : ViewMode.VISITOR)} className="px-4 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-bold text-zinc-400 hover:text-white transition-colors">
+              {viewMode === ViewMode.ADMIN ? 'Store' : 'Admin'}
+            </button>
           </div>
         </div>
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 py-8 flex-grow w-full">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-40">
-            <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
-            <p className="text-zinc-500 animate-pulse font-medium">Initializing Vault...</p>
-          </div>
+          <div className="flex items-center justify-center py-40"><div className="w-10 h-10 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div></div>
         ) : viewMode === ViewMode.ADMIN ? (
           currentUser ? (
             <AdminPanel 
-              games={games}
-              templates={templates}
-              onAddGame={addGame}
-              onEditGame={editGame}
-              onDeleteGame={deleteGame}
-              onAddTemplate={handleAddTemplate}
-              onDeleteTemplate={handleDeleteTemplate}
+              games={games} templates={templates} 
+              onAddGame={async (g) => { setGames([g, ...games]); await cloudSaveGame(g); }}
+              onEditGame={async (g) => { setGames(games.map(x => x.id === g.id ? g : x)); await cloudSaveGame(g); }}
+              onDeleteGame={async (id) => { setGames(games.filter(x => x.id !== id)); await cloudDeleteGame(id); }}
+              onAddTemplate={async (l, c) => { const n = { id: Date.now().toString(), label: l, category: c }; setTemplates([...templates, n]); await cloudSaveTemplate(n); }}
+              onDeleteTemplate={async (id) => { setTemplates(templates.filter(x => x.id !== id)); await cloudDeleteTemplate(id); }}
             />
-          ) : (
-            <LoginForm />
-          )
+          ) : <LoginForm />
         ) : (
           <div className="space-y-8">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-3xl font-extrabold text-white">Explore Games</h2>
-                <p className="text-zinc-500 mt-1">Requirements and trailers for your next adventure.</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setOnlyWithRequirements(!onlyWithRequirements)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all duration-200 text-sm font-semibold ${
-                    onlyWithRequirements 
-                    ? 'bg-amber-500/10 border-amber-500/50 text-amber-500 shadow-lg shadow-amber-500/5' 
-                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:bg-zinc-800'
-                  }`}
-                >
-                  <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${onlyWithRequirements ? 'bg-amber-500 border-amber-500' : 'border-zinc-700'}`}>
-                    {onlyWithRequirements && (
-                      <svg className="w-3 h-3 text-zinc-900" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-                  Special Requirements Only
-                </button>
-              </div>
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-white">Game Collection</h2>
+              <button onClick={() => setIsFilterDrawerOpen(true)} className="md:hidden flex items-center gap-2 px-4 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold text-white">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                Filters {selectedReqIds.length > 0 && `(${selectedReqIds.length})`}
+              </button>
             </div>
-
-            {/* Comprehensive Filter Sidebar/Bar */}
-            <div className="bg-zinc-900/30 border border-zinc-800/60 rounded-3xl p-6 md:p-8 space-y-8 backdrop-blur-sm">
-              <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-indigo-500/10 rounded-lg">
-                    <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
-                  </div>
-                  <h3 className="text-sm font-black text-zinc-300 uppercase tracking-[0.2em]">Hardware Filter</h3>
-                </div>
-                {selectedReqIds.length > 0 && (
-                  <button 
-                    onClick={() => setSelectedReqIds([])}
-                    className="text-[11px] font-black text-indigo-400 hover:text-indigo-300 uppercase tracking-widest bg-indigo-500/5 px-3 py-1.5 rounded-full border border-indigo-500/20"
-                  >
-                    Reset Filters
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-                {/* RAM Category */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.5)]" />
-                    <h4 className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">Memory (RAM)</h4>
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {groupedTemplates.ram.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => toggleReqId(t.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                          selectedReqIds.includes(t.id)
-                          ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-600/30'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                    {groupedTemplates.ram.length === 0 && <span className="text-xs text-zinc-600 italic">No RAM tags found</span>}
-                  </div>
-                </div>
-
-                {/* VGA Category */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                    <h4 className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">Graphics (VGA)</h4>
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {groupedTemplates.vga.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => toggleReqId(t.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                          selectedReqIds.includes(t.id)
-                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/30'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                    {groupedTemplates.vga.length === 0 && <span className="text-xs text-zinc-600 italic">No VGA tags found</span>}
-                  </div>
-                </div>
-
-                {/* Others Category */}
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                    <h4 className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">Additional Reqs</h4>
-                  </div>
-                  <div className="flex flex-wrap gap-2.5">
-                    {groupedTemplates.others.map(t => (
-                      <button
-                        key={t.id}
-                        onClick={() => toggleReqId(t.id)}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
-                          selectedReqIds.includes(t.id)
-                          ? 'bg-amber-600 border-amber-500 text-white shadow-lg shadow-amber-600/30'
-                          : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    ))}
-                    {groupedTemplates.others.length === 0 && <span className="text-xs text-zinc-600 italic">No other tags found</span>}
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <aside className="hidden md:block sticky top-24 h-fit bg-zinc-900/40 p-6 rounded-3xl border border-zinc-800/60 backdrop-blur-sm"><FilterPanel /></aside>
+              <div className="md:col-span-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredGames.map(game => <GameCard key={game.id} game={game} onClick={setSelectedGame} />)}
+                  {filteredGames.length === 0 && <div className="col-span-full py-40 text-center text-zinc-600 border border-zinc-800/50 border-dashed rounded-[3rem]">No games found matching criteria.</div>}
                 </div>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {filteredGames.length > 0 ? (
-                filteredGames.map(game => (
-                  <GameCard 
-                    key={game.id} 
-                    game={game} 
-                    onClick={setSelectedGame} 
-                  />
-                ))
-              ) : (
-                <div className="col-span-full py-28 text-center bg-zinc-900/20 border border-zinc-800/40 rounded-[2rem] border-dashed">
-                  <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-zinc-900 border border-zinc-800 mb-6">
-                    <svg className="w-10 h-10 text-zinc-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <h3 className="text-2xl font-bold text-zinc-400">Nothing fits the criteria</h3>
-                  <p className="text-zinc-600 mt-2 max-w-sm mx-auto">Try clearing your hardware filters or adjusting your search term.</p>
-                  <button 
-                    onClick={() => { setSelectedReqIds([]); setSearchTerm(''); setOnlyWithRequirements(false); }}
-                    className="mt-8 text-indigo-400 font-bold hover:text-indigo-300 transition-colors"
-                  >
-                    Clear everything
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
       </main>
-
       <Footer />
-
-      <GameModal 
-        game={selectedGame} 
-        templates={templates}
-        onClose={() => setSelectedGame(null)} 
-      />
+      <GameModal game={selectedGame} templates={templates} onClose={() => setSelectedGame(null)} />
     </div>
   );
 };

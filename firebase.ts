@@ -4,13 +4,6 @@ import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_PROJECT_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "YOUR_PROJECT_MSG_SENDER_ID",
-  appId: "YOUR_PROJECT_APP_ID",
-  measurementId: "YOUR_PROJECT_MEASUREMENT_ID"
 };
 
 // Check if the user has actually filled in their config

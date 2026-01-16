@@ -1,15 +1,22 @@
 
 import { Game, SteamSearchResult } from "../types";
 
-// Using a public CORS proxy because Steam's API does not set CORS headers for browser requests
-const PROXY_URL = "https://api.allorigins.win/get?url=";
+// Correct format for corsproxy.io requires the 'url=' parameter for reliable fetching
+const PROXY_URL = "https://corsproxy.io/?url=";
 
 export const searchSteamGames = async (query: string): Promise<SteamSearchResult[]> => {
   try {
     const steamSearchUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=english&cc=US`;
+    
+    // We encode the full Steam URL to ensure it is correctly passed as a parameter to the proxy
     const response = await fetch(`${PROXY_URL}${encodeURIComponent(steamSearchUrl)}`);
-    const data = await response.json();
-    const parsed = JSON.parse(data.contents);
+    
+    if (!response.ok) {
+      console.warn(`Steam Proxy Search Error: ${response.status} ${response.statusText}`);
+      return [];
+    }
+    
+    const parsed = await response.json();
 
     if (!parsed || !parsed.items) return [];
 
@@ -19,6 +26,7 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
     }));
   } catch (error) {
     console.error("Steam Search Error:", error);
+    // Return an empty array to prevent the UI from breaking on fetch failures
     return [];
   }
 };
@@ -27,8 +35,12 @@ export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>>
   try {
     const steamDetailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
     const response = await fetch(`${PROXY_URL}${encodeURIComponent(steamDetailsUrl)}`);
-    const data = await response.json();
-    const parsed = JSON.parse(data.contents);
+    
+    if (!response.ok) {
+      throw new Error(`Steam Proxy Details Error: ${response.status} ${response.statusText}`);
+    }
+    
+    const parsed = await response.json();
 
     if (!parsed || !parsed[appId] || !parsed[appId].success) {
       throw new Error("Game not found or Steam API error");
@@ -39,7 +51,7 @@ export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>>
     // Extracting the best quality trailer if available
     let trailerUrl = "";
     if (gameData.movies && gameData.movies.length > 0) {
-      // Prefer the highest quality webm or mp4
+      // Prefer the highest quality mp4, fallback to webm
       trailerUrl = gameData.movies[0].mp4?.max || gameData.movies[0].webm?.max || "";
     }
 

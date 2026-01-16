@@ -2,6 +2,7 @@
 export interface RequirementTemplate {
   id: string;
   label: string;
+  category: 'ram' | 'vga' | 'others';
 }
 
 export interface Game {

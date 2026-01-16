@@ -7,10 +7,12 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 export const searchSteamGames = async (query: string): Promise<SteamSearchResult[]> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: [{
         parts: [{
-          text: `Search for Steam games matching: "${query}". Return a list of up to 5 games with their Steam App IDs and full names. Return ONLY a JSON array.`
+          text: `Search for official Steam Store games matching the query: "${query}". 
+          Return a JSON list of up to 5 results. 
+          For each result, provide the 'appId' (as a string) and the 'name' (exactly as it appears on the Steam Storefront).`
         }]
       }],
       config: {
@@ -20,8 +22,8 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
           items: {
             type: Type.OBJECT,
             properties: {
-              appId: { type: Type.STRING, description: "The Steam Application ID" },
-              name: { type: Type.STRING, description: "The Name of the Game" }
+              appId: { type: Type.STRING, description: "The numeric Steam App ID" },
+              name: { type: Type.STRING, description: "The official Steam storefront title" }
             },
             required: ["appId", "name"]
           }
@@ -30,24 +32,16 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
     });
 
     const text = response.text;
-    if (!text) {
-      console.warn(`Gemini API returned an empty response for query: "${query}"`);
-      return [];
-    }
+    if (!text) return [];
 
     try {
       return JSON.parse(text);
     } catch (parseError) {
-      console.error(`Failed to parse search results JSON for query: "${query}". Raw text: ${text}`, parseError);
+      console.error(`Failed to parse search results JSON. Raw text: ${text}`, parseError);
       return [];
     }
   } catch (apiError: any) {
-    // Specific check for the common 500 error seen in the environment
-    console.error(`Error calling Gemini API for search query: "${query}".`, {
-      message: apiError?.message,
-      error: apiError?.error,
-      status: apiError?.status
-    });
+    console.error(`Error calling Gemini API for search query.`, apiError);
     return [];
   }
 };
@@ -55,18 +49,21 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
 export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-flash-latest",
+      model: "gemini-3-flash-preview",
       contents: [{
         parts: [{
-          text: `Fetch complete details for Steam game with AppID: ${appId}. 
-          You must provide:
-          1. name: The official title.
-          2. thumbnail: A high-quality header image URL.
-          3. price: The current price (e.g., "$59.99" or "Free to Play").
-          4. description: A brief, engaging summary (HTML format allowed).
-          5. minRequirements: Minimum PC specs (HTML format allowed).
-          6. recommendedRequirements: Recommended PC specs (HTML format allowed).
-          7. trailerUrl: A valid URL for a video trailer (YouTube or Steam mp4).
+          text: `You are an expert on the Steam Storefront. Fetch the official data for App ID: ${appId}.
+          
+          REQUIRED FIELDS:
+          1. name: The exact official title from the Steam Store. Do NOT shorten it.
+          2. thumbnail: Use "https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg".
+          3. price: Current price or "Free to Play".
+          4. description: A detailed, high-quality HTML summary (3+ paragraphs) covering gameplay, features, and setting.
+          5. minRequirements: Minimum PC specs in HTML format.
+          6. recommendedRequirements: Recommended PC specs in HTML format.
+          7. trailerUrl: A valid URL for a video. Try to find a direct .mp4 from steamstatic or a high-quality YouTube link.
+          8. releaseDate: Format YYYY-MM-DD.
+          
           Return ONLY a JSON object.`
         }]
       }],
@@ -98,7 +95,7 @@ export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>>
       steamAppId: appId
     };
   } catch (e: any) {
-    console.error(`Failed to fetch or parse game details for AppID: ${appId}`, e);
+    console.error(`Failed to fetch game details for AppID: ${appId}`, e);
     throw e;
   }
 };

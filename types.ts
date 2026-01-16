@@ -1,9 +1,17 @@
 
-export interface RequirementTemplate {
+export interface RamVgaTemplate {
+  id: string;
+  label: number;
+  category: 'ram' | 'vga';
+}
+
+export interface MiscTemplate {
   id: string;
   label: string;
-  category: 'ram' | 'vga' | 'others';
+  category: 'others';
 }
+
+export type RequirementTemplate = RamVgaTemplate | MiscTemplate;
 
 export interface Game {
   id: string;

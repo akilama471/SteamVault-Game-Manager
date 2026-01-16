@@ -1,22 +1,25 @@
 
 import React, { useState, useMemo } from 'react';
-import { Game, SteamSearchResult, RequirementTemplate } from '../types';
+import { Game, SteamSearchResult, RamVgaTemplate, MiscTemplate } from '../types';
 import { searchSteamGames, getSteamGameDetails } from '../services/steamService';
 import { Button } from './Button';
 import { logoutAdmin } from '../firebase';
 
 interface AdminPanelProps {
   games: Game[];
-  templates: RequirementTemplate[];
+  templates: RamVgaTemplate[];
+  miscTemplates: MiscTemplate[];
   onAddGame: (game: Game) => Promise<void>;
   onEditGame: (game: Game) => Promise<void>;
   onDeleteGame: (id: string) => Promise<void>;
-  onAddTemplate: (label: string, category: 'ram' | 'vga' | 'others') => void;
+  onAddTemplate: (label: number, category: 'ram' | 'vga') => void;
+  onAddRequirements: (label: string, category: 'others') => void;
   onDeleteTemplate: (id: string) => void;
+  onDeleteRequirements: (id: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({ 
-  games, templates, onAddGame, onEditGame, onDeleteGame, onAddTemplate, onDeleteTemplate 
+  games, templates, miscTemplates, onAddGame, onEditGame, onDeleteGame, onAddTemplate, onAddRequirements, onDeleteTemplate, onDeleteRequirements 
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SteamSearchResult[]>([]);
@@ -28,12 +31,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [newTags, setNewTags] = useState({ ram: '', vga: '', others: '' });
 
   const grouped = useMemo(() => {
+    const safeT = Array.isArray(templates) ? templates : [];
+    const safeM = Array.isArray(miscTemplates) ? miscTemplates : [];
     return {
-      ram: templates.filter(t => t.category === 'ram'),
-      vga: templates.filter(t => t.category === 'vga'),
-      others: templates.filter(t => t.category === 'others')
+      ram: safeT.filter(t => t.category === 'ram'),
+      vga: safeT.filter(t => t.category === 'vga'),
+      others: safeM.filter(t => t.category === 'others')
     };
-  }, [templates]);
+  }, [templates, miscTemplates]);
 
   const handleSteamSync = async (appId: string) => {
     setIsFetching(true);
@@ -66,7 +71,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Steam Import */}
         <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 space-y-6">
           <h3 className="text-xl font-bold text-white">Import from Steam</h3>
           <div className="flex gap-2">
@@ -84,37 +88,44 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           )}
         </div>
 
-        {/* Triple-Input Tag Manager */}
         <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 space-y-6">
           <h3 className="text-xl font-bold text-white">Hardware Tags Manager</h3>
           <div className="space-y-4">
             {([
-              { key: 'ram', label: 'Memory (RAM)', color: 'text-indigo-400', placeholder: 'e.g. 16GB RAM' },
-              { key: 'vga', label: 'Graphics (VGA)', color: 'text-emerald-400', placeholder: 'e.g. 8GB VRAM' },
-              { key: 'others', label: 'Misc/System', color: 'text-amber-400', placeholder: 'e.g. SSD Required' }
+              { key: 'ram', label: 'Memory (RAM)', color: 'text-indigo-400', placeholder: 'e.g. 8', suffix: 'GB' },
+              { key: 'vga', label: 'Graphics (VGA)', color: 'text-emerald-400', placeholder: 'e.g. 4', suffix: 'GB' },
             ] as const).map(cat => (
               <div key={cat.key} className="space-y-2">
                 <label className={`text-[10px] font-bold ${cat.color} uppercase tracking-widest`}>{cat.label}</label>
                 <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={newTags[cat.key]} 
-                    onChange={e => setNewTags({...newTags, [cat.key]: e.target.value})}
-                    placeholder={cat.placeholder}
-                    className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-3 py-1.5 text-xs outline-none" 
-                  />
-                  <Button size="sm" onClick={() => { if(newTags[cat.key]) { onAddTemplate(newTags[cat.key], cat.key); setNewTags({...newTags, [cat.key]: ''}); } }}>Add</Button>
+                  <input type="number" value={newTags[cat.key]} onChange={e => setNewTags({...newTags, [cat.key]: e.target.value})} placeholder={cat.placeholder} className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-3 py-1.5 text-xs outline-none" />
+                  <Button size="sm" onClick={() => { if(newTags[cat.key]) { onAddTemplate(Number(newTags[cat.key]), cat.key); setNewTags({...newTags, [cat.key]: ''}); } }}>Add</Button>
                 </div>
                 <div className="flex flex-wrap gap-2 pt-1">
                   {grouped[cat.key].map(t => (
                     <div key={t.id} className="bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-md flex items-center gap-2 group">
-                      <span className="text-[10px] text-zinc-500 font-medium">{t.label}</span>
+                      <span className="text-[10px] text-zinc-500 font-medium">{t.label}{cat.suffix}</span>
                       <button onClick={() => onDeleteTemplate(t.id)} className="text-zinc-700 hover:text-red-500 transition-colors"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg></button>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Misc/System</label>
+              <div className="flex gap-2">
+                <input type="text" value={newTags.others} onChange={e => setNewTags({...newTags, others: e.target.value})} placeholder="e.g. SSD Required" className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-3 py-1.5 text-xs outline-none" />
+                <Button size="sm" onClick={() => { if(newTags.others) { onAddRequirements(newTags.others, 'others'); setNewTags({...newTags, others: ''}); } }}>Add</Button>
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {grouped.others.map(t => (
+                  <div key={t.id} className="bg-zinc-950 border border-zinc-800 px-2 py-1 rounded-md flex items-center gap-2 group">
+                    <span className="text-[10px] text-zinc-500 font-medium">{t.label}</span>
+                    <button onClick={() => onDeleteRequirements(t.id)} className="text-zinc-700 hover:text-red-500 transition-colors"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" /></svg></button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -128,16 +139,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-10 custom-scrollbar">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-zinc-950/40 p-6 rounded-2xl border border-zinc-800/50">
-                {([
-                  { key: 'ram', title: 'Memory (RAM)', color: 'text-indigo-400' },
-                  { key: 'vga', title: 'Graphics (VGA)', color: 'text-emerald-400' },
-                  { key: 'others', title: 'Misc/System', color: 'text-amber-400' }
-                ] as const).map(cat => (
+                {[
+                  { key: 'ram', title: 'Memory (RAM)', color: 'text-indigo-400', suffix: 'GB', list: grouped.ram },
+                  { key: 'vga', title: 'Graphics (VGA)', color: 'text-emerald-400', suffix: 'GB', list: grouped.vga },
+                  { key: 'others', title: 'Misc/System', color: 'text-amber-400', suffix: '', list: grouped.others }
+                ].map(cat => (
                   <div key={cat.key} className="space-y-3">
                     <span className={`text-[10px] font-bold ${cat.color} uppercase tracking-widest`}>{cat.title}</span>
                     <div className="flex flex-wrap gap-2">
-                      {grouped[cat.key].map(t => (
-                        <button key={t.id} onClick={() => toggleTag(t.id)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${editingGame.requirementIds?.includes(t.id) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>{t.label}</button>
+                      {cat.list.map(t => (
+                        <button key={t.id} onClick={() => toggleTag(t.id)} className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-all ${editingGame.requirementIds?.includes(t.id) ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-zinc-900 border-zinc-800 text-zinc-500'}`}>
+                          {t.label}{cat.suffix}
+                        </button>
                       ))}
                     </div>
                   </div>

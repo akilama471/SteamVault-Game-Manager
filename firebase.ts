@@ -4,6 +4,13 @@ import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
+  apiKey: "AIzaSyBzo0PYObqr2m7v6660tOfz_OymLlAPgJM",
+  authDomain: "steamvault-game-manager.firebaseapp.com",
+  projectId: "steamvault-game-manager",
+  storageBucket: "steamvault-game-manager.firebasestorage.app",
+  messagingSenderId: "372302273006",
+  appId: "1:372302273006:web:da4e5c06bc9ec91f5796ff",
+  measurementId: "G-G25VG3Z94N"
 };
 
 // Check if the user has actually filled in their config
@@ -15,6 +22,7 @@ let db: any = null;
 let auth: any = null;
 let gamesCollection: any = null;
 let templatesCollection: any = null;
+let requirementsCollection: any = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -23,6 +31,7 @@ if (isFirebaseConfigured) {
     auth = getAuth(app);
     gamesCollection = collection(db, "games");
     templatesCollection = collection(db, "templates");
+    requirementsCollection = collection(db, "requirements");
   } catch (err) {
     console.error("Firebase initialization failed:", err);
   }
@@ -89,6 +98,17 @@ export const cloudSaveTemplate = async (template: any) => {
   }
 };
 
+export const cloudSaveRequirements = async (requirement: any) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await setDoc(doc(db, "requirements", requirement.id), requirement);
+  } catch (err: any) {
+    console.error("Cloud Save Requirement Error:", err);
+    throw err;
+  }
+};
+
+
 export const cloudDeleteTemplate = async (id: string) => {
   if (!isFirebaseConfigured || !db) return;
   try {
@@ -99,10 +119,30 @@ export const cloudDeleteTemplate = async (id: string) => {
   }
 };
 
+export const cloudDeleteRequirements = async (id: string) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await deleteDoc(doc(db, "requirements", id));
+  } catch (err: any) {
+    console.error("Cloud Delete Requirement Error:", err);
+    throw err;
+  }
+};
+
 export const cloudFetchTemplates = async () => {
   if (!isFirebaseConfigured || !templatesCollection) return null;
   try {
     const snapshot = await getDocs(templatesCollection);
+    return snapshot.docs.map(doc => doc.data());
+  } catch (err: any) {
+    throw err;
+  }
+};
+
+export const cloudFetchRequirements = async () => {
+  if (!isFirebaseConfigured || !requirementsCollection) return null;
+  try {
+    const snapshot = await getDocs(requirementsCollection);
     return snapshot.docs.map(doc => doc.data());
   } catch (err: any) {
     throw err;

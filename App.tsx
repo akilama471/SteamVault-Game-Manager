@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Game, ViewMode, RequirementTemplate } from './types';
+import { Game, ViewMode, RamVgaTemplate, MiscTemplate, RequirementTemplate } from './types';
 import { AdminPanel } from './components/AdminPanel';
 import { GameCard } from './components/GameCard';
 import { GameModal } from './components/GameModal';
@@ -13,21 +13,24 @@ import {
   isFirebaseConfigured, 
   subscribeToAuth,
   cloudFetchTemplates,
+  cloudFetchRequirements,
   cloudSaveTemplate,
-  cloudDeleteTemplate
+  cloudSaveRequirements,
+  cloudDeleteTemplate,
+  cloudDeleteRequirements
 } from './firebase';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.VISITOR);
   const [games, setGames] = useState<Game[]>([]);
-  const [templates, setTemplates] = useState<RequirementTemplate[]>([]);
+  const [ramVgaTemplates, setRamVgaTemplates] = useState<RamVgaTemplate[]>([]);
+  const [miscTemplates, setMiscTemplates] = useState<MiscTemplate[]>([]);
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedReqIds, setSelectedReqIds] = useState<string[]>([]);
   const [onlyWithRequirements, setOnlyWithRequirements] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'offline' | 'error'>('synced');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   useEffect(() => {
@@ -40,17 +43,21 @@ const App: React.FC = () => {
       setIsLoading(true);
       if (isFirebaseConfigured) {
         try {
-          const [gamesResult, templatesResult] = await Promise.allSettled([
+          const [gamesRes, templatesRes, requirementsRes] = await Promise.allSettled([
             cloudFetchGames(),
-            cloudFetchTemplates()
+            cloudFetchTemplates(),
+            cloudFetchRequirements(),
           ]);
-          if (gamesResult.status === 'fulfilled' && gamesResult.value) setGames(gamesResult.value as Game[]);
-          if (templatesResult.status === 'fulfilled' && templatesResult.value) setTemplates(templatesResult.value as RequirementTemplate[]);
-          setSyncStatus('synced');
-          setIsLoading(false);
-          return;
+          
+          if (gamesRes.status === 'fulfilled' && gamesRes.value) setGames(gamesRes.value as Game[]);
+          if (templatesRes.status === 'fulfilled' && Array.isArray(templatesRes.value)) {
+            setRamVgaTemplates(templatesRes.value as RamVgaTemplate[]);
+          }
+          if (requirementsRes.status === 'fulfilled' && Array.isArray(requirementsRes.value)) {
+            setMiscTemplates(requirementsRes.value as MiscTemplate[]);
+          }
         } catch (e) {
-          setSyncStatus('offline');
+          console.error("Data fetch failed", e);
         }
       }
       setIsLoading(false);
@@ -58,19 +65,25 @@ const App: React.FC = () => {
     loadData();
   }, []);
 
-  const parseValue = (label: string): number => {
-    const match = label.toLowerCase().match(/(\d+(?:\.\d+)?)\s*(gb|mb)/);
+  const parseValue = (label: string | number): number => {
+    const sLabel = label.toString();
+    if (/^\d+(\.\d+)?$/.test(sLabel)) return parseFloat(sLabel);
+    const match = sLabel.toLowerCase().match(/(\d+(?:\.\d+)?)\s*(gb|mb)/);
     if (!match) return 0;
     let val = parseFloat(match[1]);
     return match[2] === 'mb' ? val / 1024 : val;
   };
 
   const groupedTemplates = useMemo(() => {
-    const ram = templates.filter(t => t.category === 'ram').sort((a, b) => parseValue(a.label) - parseValue(b.label));
-    const vga = templates.filter(t => t.category === 'vga').sort((a, b) => parseValue(a.label) - parseValue(b.label));
-    const others = templates.filter(t => t.category === 'others');
-    return { ram, vga, others };
-  }, [templates]);
+    const safeRamVga = Array.isArray(ramVgaTemplates) ? ramVgaTemplates : [];
+    const safeMisc = Array.isArray(miscTemplates) ? miscTemplates : [];
+    
+    return {
+      ram: safeRamVga.filter(t => t.category === 'ram').sort((a, b) => parseValue(a.label) - parseValue(b.label)),
+      vga: safeRamVga.filter(t => t.category === 'vga').sort((a, b) => parseValue(a.label) - parseValue(b.label)),
+      others: safeMisc.filter(t => t.category === 'others')
+    };
+  }, [ramVgaTemplates, miscTemplates]);
 
   const filteredGames = useMemo(() => {
     const query = searchTerm.toLowerCase().trim();
@@ -80,7 +93,7 @@ const App: React.FC = () => {
       if (onlyWithRequirements && gameReqs.length === 0) return false;
 
       if (selectedReqIds.length > 0) {
-        // RAM Threshold Logic
+        // RAM Compatibility
         const selRam = groupedTemplates.ram.filter(t => selectedReqIds.includes(t.id));
         if (selRam.length > 0) {
           const userMax = Math.max(...selRam.map(t => parseValue(t.label)));
@@ -91,7 +104,7 @@ const App: React.FC = () => {
           } else if (onlyWithRequirements) return false;
         }
 
-        // VGA Threshold Logic
+        // VGA Compatibility
         const selVga = groupedTemplates.vga.filter(t => selectedReqIds.includes(t.id));
         if (selVga.length > 0) {
           const userMax = Math.max(...selVga.map(t => parseValue(t.label)));
@@ -103,13 +116,17 @@ const App: React.FC = () => {
           } else if (onlyWithRequirements) return false;
         }
 
-        // Others: OR Logic
+        // Misc Features
         const selOther = selectedReqIds.filter(id => groupedTemplates.others.some(t => t.id === id));
         if (selOther.length > 0 && !selOther.some(id => gameReqs.includes(id))) return false;
       }
       return true;
     });
   }, [games, searchTerm, selectedReqIds, onlyWithRequirements, groupedTemplates]);
+
+  const allTemplates: RequirementTemplate[] = useMemo(() => {
+    return [...ramVgaTemplates, ...miscTemplates];
+  }, [ramVgaTemplates, miscTemplates]);
 
   const FilterPanel = () => (
     <div className="space-y-8">
@@ -119,9 +136,9 @@ const App: React.FC = () => {
       </div>
       <div className="space-y-6">
         {[
-          { title: "Memory", tags: groupedTemplates.ram, color: "bg-indigo-500" },
-          { title: "Graphics", tags: groupedTemplates.vga, color: "bg-emerald-500" },
-          { title: "Features", tags: groupedTemplates.others, color: "bg-amber-500" }
+          { title: "Memory (RAM)", tags: groupedTemplates.ram, color: "bg-indigo-500", suffix: "GB" },
+          { title: "Graphics (VGA)", tags: groupedTemplates.vga, color: "bg-emerald-500", suffix: "GB" },
+          { title: "Features", tags: groupedTemplates.others, color: "bg-amber-500", suffix: "" }
         ].map(s => (
           <div key={s.title} className="space-y-3">
             <h4 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2">
@@ -134,7 +151,7 @@ const App: React.FC = () => {
                   onClick={() => setSelectedReqIds(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${selectedReqIds.includes(t.id) ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
                 >
-                  {t.label}
+                  {t.label}{s.suffix}
                 </button>
               ))}
             </div>
@@ -146,7 +163,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-zinc-950">
-      {/* Mobile Drawer */}
       <div className={`fixed inset-0 z-[100] transition-opacity duration-300 ${isFilterDrawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setIsFilterDrawerOpen(false)} />
         <div className={`absolute left-0 top-0 bottom-0 w-80 bg-zinc-950 border-r border-zinc-800 shadow-2xl transition-transform duration-300 transform ${isFilterDrawerOpen ? 'translate-x-0' : '-translate-x-full'}`}>
@@ -185,12 +201,16 @@ const App: React.FC = () => {
         ) : viewMode === ViewMode.ADMIN ? (
           currentUser ? (
             <AdminPanel 
-              games={games} templates={templates} 
+              games={games} 
+              templates={ramVgaTemplates} 
+              miscTemplates={miscTemplates}
               onAddGame={async (g) => { setGames([g, ...games]); await cloudSaveGame(g); }}
               onEditGame={async (g) => { setGames(games.map(x => x.id === g.id ? g : x)); await cloudSaveGame(g); }}
               onDeleteGame={async (id) => { setGames(games.filter(x => x.id !== id)); await cloudDeleteGame(id); }}
-              onAddTemplate={async (l, c) => { const n = { id: Date.now().toString(), label: l, category: c }; setTemplates([...templates, n]); await cloudSaveTemplate(n); }}
-              onDeleteTemplate={async (id) => { setTemplates(templates.filter(x => x.id !== id)); await cloudDeleteTemplate(id); }}
+              onAddTemplate={async (l, c) => { const n = { id: Date.now().toString(), label: l, category: c }; setRamVgaTemplates(prev => [...prev, n]); await cloudSaveTemplate(n); }}
+              onAddRequirements={async (l, c) => { const n = { id: Date.now().toString(), label: l, category: c }; setMiscTemplates(prev => [...prev, n]); await cloudSaveRequirements(n); }}
+              onDeleteTemplate={async (id) => { setRamVgaTemplates(prev => prev.filter(x => x.id !== id)); await cloudDeleteTemplate(id); }}
+              onDeleteRequirements={async (id) => { setMiscTemplates(prev => prev.filter(x => x.id !== id)); await cloudDeleteRequirements(id); }}
             />
           ) : <LoginForm />
         ) : (
@@ -215,7 +235,7 @@ const App: React.FC = () => {
         )}
       </main>
       <Footer />
-      <GameModal game={selectedGame} templates={templates} onClose={() => setSelectedGame(null)} />
+      <GameModal game={selectedGame} templates={allTemplates} onClose={() => setSelectedGame(null)} />
     </div>
   );
 };

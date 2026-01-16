@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Game, RequirementTemplate } from '../types';
 import { Button } from './Button';
@@ -223,7 +222,8 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
                             key={t.id} 
                             className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-[10px] font-bold text-amber-500"
                           >
-                            {t.label}
+                            {/* Convert label to string for regex test */}
+                            {t.label}{(t.category === 'ram' || t.category === 'vga') && /^\d+(\.\d+)?$/.test(t.label.toString()) ? 'GB' : ''}
                           </span>
                         ))}
                       </div>

@@ -1,4 +1,9 @@
 
+export interface RequirementTemplate {
+  id: string;
+  label: string;
+}
+
 export interface Game {
   id: string;
   steamAppId?: string;
@@ -10,6 +15,7 @@ export interface Game {
   recommendedRequirements: string;
   trailerUrl: string;
   releaseDate?: string;
+  requirementIds?: string[]; // IDs linking to RequirementTemplate
 }
 
 export interface SteamSearchResult {

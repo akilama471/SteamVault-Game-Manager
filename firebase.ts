@@ -3,14 +3,14 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebas
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
-// IMPORTANT: Replace these with your real values from the Firebase Console
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
+  apiKey: "YOUR_PROJECT_API_KEY",
   authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: "steamvault-game-manager",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+  messagingSenderId: "YOUR_PROJECT_MSG_SENDER_ID",
+  appId: "YOUR_PROJECT_APP_ID",
+  measurementId: "YOUR_PROJECT_MEASUREMENT_ID"
 };
 
 // Check if the user has actually filled in their config
@@ -21,6 +21,7 @@ export const isFirebaseConfigured =
 let db: any = null;
 let auth: any = null;
 let gamesCollection: any = null;
+let templatesCollection: any = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -28,6 +29,7 @@ if (isFirebaseConfigured) {
     db = getFirestore(app);
     auth = getAuth(app);
     gamesCollection = collection(db, "games");
+    templatesCollection = collection(db, "templates");
   } catch (err) {
     console.error("Firebase initialization failed:", err);
   }
@@ -51,13 +53,15 @@ export const subscribeToAuth = (callback: (user: any) => void) => {
   return onAuthStateChanged(auth, callback);
 };
 
-// Firestore Helpers
+// Firestore Helpers - Games
 export const cloudSaveGame = async (game: any) => {
   if (!isFirebaseConfigured || !db) return;
   try {
     await setDoc(doc(db, "games", game.id), game);
-  } catch (err) {
-    console.warn("Cloud save failed (check Firestore Rules):", err);
+  } catch (err: any) {
+    if (err.code === 'permission-denied') {
+      console.error("PERMISSION DENIED: You must be logged in as an admin to save games.");
+    }
     throw err;
   }
 };
@@ -66,22 +70,48 @@ export const cloudDeleteGame = async (id: string) => {
   if (!isFirebaseConfigured || !db) return;
   try {
     await deleteDoc(doc(db, "games", id));
-  } catch (err) {
-    console.warn("Cloud delete failed:", err);
+  } catch (err: any) {
     throw err;
   }
 };
 
 export const cloudFetchGames = async () => {
-  if (!isFirebaseConfigured || !gamesCollection) {
-    console.info("Firebase not configured. Using local mode.");
-    return null;
-  }
+  if (!isFirebaseConfigured || !gamesCollection) return null;
   try {
     const snapshot = await getDocs(gamesCollection);
     return snapshot.docs.map(doc => doc.data());
-  } catch (err) {
-    console.error("Error fetching from Firestore:", err);
+  } catch (err: any) {
+    throw err;
+  }
+};
+
+// Firestore Helpers - Templates
+export const cloudSaveTemplate = async (template: any) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await setDoc(doc(db, "templates", template.id), template);
+  } catch (err: any) {
+    console.error("Cloud Save Template Error:", err);
+    throw err;
+  }
+};
+
+export const cloudDeleteTemplate = async (id: string) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await deleteDoc(doc(db, "templates", id));
+  } catch (err: any) {
+    console.error("Cloud Delete Template Error:", err);
+    throw err;
+  }
+};
+
+export const cloudFetchTemplates = async () => {
+  if (!isFirebaseConfigured || !templatesCollection) return null;
+  try {
+    const snapshot = await getDocs(templatesCollection);
+    return snapshot.docs.map(doc => doc.data());
+  } catch (err: any) {
     throw err;
   }
 };

@@ -7,8 +7,12 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 export const searchSteamGames = async (query: string): Promise<SteamSearchResult[]> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: `Search for Steam games matching: "${query}". Return a list of up to 5 games with their Steam App IDs.`,
+      model: "gemini-flash-latest",
+      contents: [{
+        parts: [{
+          text: `Search for Steam games matching: "${query}". Return a list of up to 5 games with their Steam App IDs and full names. Return ONLY a JSON array.`
+        }]
+      }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -27,7 +31,7 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
 
     const text = response.text;
     if (!text) {
-      console.error(`Gemini API returned an empty response for query: "${query}"`);
+      console.warn(`Gemini API returned an empty response for query: "${query}"`);
       return [];
     }
 
@@ -37,43 +41,64 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
       console.error(`Failed to parse search results JSON for query: "${query}". Raw text: ${text}`, parseError);
       return [];
     }
-  } catch (apiError) {
-    console.error(`Error calling Gemini API for search query: "${query}"`, apiError);
+  } catch (apiError: any) {
+    // Specific check for the common 500 error seen in the environment
+    console.error(`Error calling Gemini API for search query: "${query}".`, {
+      message: apiError?.message,
+      error: apiError?.error,
+      status: apiError?.status
+    });
     return [];
   }
 };
 
 export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>> => {
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
-    contents: `Get full details for Steam game with AppID: ${appId}. Include description, thumbnail URL (header_image), price (if possible), minimum requirements, recommended requirements, and a YouTube trailer link or Steam movie link if available.`,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          name: { type: Type.STRING },
-          thumbnail: { type: Type.STRING },
-          price: { type: Type.STRING },
-          description: { type: Type.STRING },
-          minRequirements: { type: Type.STRING },
-          recommendedRequirements: { type: Type.STRING },
-          trailerUrl: { type: Type.STRING },
-          releaseDate: { type: Type.STRING }
-        },
-        required: ["name", "thumbnail", "description", "minRequirements", "recommendedRequirements"]
-      }
-    }
-  });
-
   try {
-    const data = JSON.parse(response.text);
+    const response = await ai.models.generateContent({
+      model: "gemini-flash-latest",
+      contents: [{
+        parts: [{
+          text: `Fetch complete details for Steam game with AppID: ${appId}. 
+          You must provide:
+          1. name: The official title.
+          2. thumbnail: A high-quality header image URL.
+          3. price: The current price (e.g., "$59.99" or "Free to Play").
+          4. description: A brief, engaging summary (HTML format allowed).
+          5. minRequirements: Minimum PC specs (HTML format allowed).
+          6. recommendedRequirements: Recommended PC specs (HTML format allowed).
+          7. trailerUrl: A valid URL for a video trailer (YouTube or Steam mp4).
+          Return ONLY a JSON object.`
+        }]
+      }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            thumbnail: { type: Type.STRING },
+            price: { type: Type.STRING },
+            description: { type: Type.STRING },
+            minRequirements: { type: Type.STRING },
+            recommendedRequirements: { type: Type.STRING },
+            trailerUrl: { type: Type.STRING },
+            releaseDate: { type: Type.STRING }
+          },
+          required: ["name", "thumbnail", "description", "minRequirements", "recommendedRequirements"]
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) throw new Error("Empty response from Gemini API");
+
+    const data = JSON.parse(text);
     return {
       ...data,
       steamAppId: appId
     };
-  } catch (e) {
-    console.error("Failed to parse game details", e);
-    return {};
+  } catch (e: any) {
+    console.error(`Failed to fetch or parse game details for AppID: ${appId}`, e);
+    throw e;
   }
 };

@@ -34,9 +34,8 @@ const App: React.FC = () => {
   const addGame = (game: Game) => saveGames([game, ...games]);
   const editGame = (updatedGame: Game) => saveGames(games.map(g => g.id === updatedGame.id ? updatedGame : g));
   const deleteGame = (id: string) => {
-    if (window.confirm('Delete this game from library?')) {
-      saveGames(games.filter(g => g.id !== id));
-    }
+    // Confirmation is now handled in the AdminPanel component UI
+    saveGames(games.filter(g => g.id !== id));
   };
 
   const filteredGames = games.filter(g => 

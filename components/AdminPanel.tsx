@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Game, SteamSearchResult, RamVgaTemplate, MiscTemplate } from '../types';
 import { searchSteamGames, getSteamGameDetails } from '../services/steamService';
@@ -22,6 +21,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   games, templates, miscTemplates, onAddGame, onEditGame, onDeleteGame, onAddTemplate, onAddRequirements, onDeleteTemplate, onDeleteRequirements 
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [steamIdInput, setSteamIdInput] = useState('');
   const [searchResults, setSearchResults] = useState<SteamSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [editingGame, setEditingGame] = useState<Partial<Game> | null>(null);
@@ -41,12 +41,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }, [templates, miscTemplates]);
 
   const handleSteamSync = async (appId: string) => {
+    if (!appId) return;
     setIsFetching(true);
     setSearchResults([]);
     try {
       const details = await getSteamGameDetails(appId);
       setEditingGame({ ...details, id: Date.now().toString(), requirementIds: [] });
-    } catch (e) { alert("Steam sync failed."); }
+      setSteamIdInput('');
+    } catch (e) { alert("Steam sync failed. Please check the AppID."); }
     setIsFetching(false);
   };
 
@@ -73,15 +75,42 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-zinc-900 p-6 rounded-2xl border border-zinc-800 space-y-6">
           <h3 className="text-xl font-bold text-white">Import from Steam</h3>
-          <div className="flex gap-2">
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Steam game name..." className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-4 py-2 text-sm outline-none" />
-            <Button onClick={async () => { setIsSearching(true); setSearchResults(await searchSteamGames(searchQuery)); setIsSearching(false); }} isLoading={isSearching}>Search</Button>
+          
+          {/* Search by Name */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Search by Name</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={searchQuery} 
+                onChange={e => setSearchQuery(e.target.value)} 
+                placeholder="Game name..." 
+                className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-4 py-2 text-sm outline-none" 
+              />
+              <Button onClick={async () => { setIsSearching(true); setSearchResults(await searchSteamGames(searchQuery)); setIsSearching(false); }} isLoading={isSearching}>Search</Button>
+            </div>
           </div>
+
+          {/* Import by AppID */}
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Import by AppID</label>
+            <div className="flex gap-2">
+              <input 
+                type="text" 
+                value={steamIdInput} 
+                onChange={e => setSteamIdInput(e.target.value)} 
+                placeholder="e.g. 1091500" 
+                className="flex-1 bg-zinc-950 border border-zinc-800 text-zinc-100 rounded-lg px-4 py-2 text-sm outline-none" 
+              />
+              <Button variant="secondary" onClick={() => handleSteamSync(steamIdInput.trim())} isLoading={isFetching}>Import ID</Button>
+            </div>
+          </div>
+
           {searchResults.length > 0 && (
             <div className="max-h-48 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-lg divide-y divide-zinc-800">
               {searchResults.map(r => (
-                <button key={r.appId} onClick={() => handleSteamSync(r.appId)} className="w-full p-3 hover:bg-zinc-900 text-left text-sm text-zinc-300 flex justify-between">
-                  {r.name} <span className="text-[10px] text-zinc-600">Sync Details</span>
+                <button key={r.appId} onClick={() => handleSteamSync(r.appId)} className="w-full p-3 hover:bg-zinc-900 text-left text-sm text-zinc-300 flex justify-between group">
+                  {r.name} <span className="text-[10px] text-zinc-600 group-hover:text-indigo-400 transition-colors">Sync Details</span>
                 </button>
               ))}
             </div>

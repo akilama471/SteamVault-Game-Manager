@@ -4,13 +4,6 @@ import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from "https
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBzo0PYObqr2m7v6660tOfz_OymLlAPgJM",
-  authDomain: "steamvault-game-manager.firebaseapp.com",
-  projectId: "steamvault-game-manager",
-  storageBucket: "steamvault-game-manager.firebasestorage.app",
-  messagingSenderId: "372302273006",
-  appId: "1:372302273006:web:da4e5c06bc9ec91f5796ff",
-  measurementId: "G-G25VG3Z94N"
 };
 
 // Check if the user has actually filled in their config

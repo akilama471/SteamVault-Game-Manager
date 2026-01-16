@@ -92,34 +92,40 @@ const App: React.FC = () => {
       const gameReqs = g.requirementIds || [];
       if (onlyWithRequirements && gameReqs.length === 0) return false;
 
-      if (selectedReqIds.length > 0) {
-        // RAM Compatibility
-        const selRam = groupedTemplates.ram.filter(t => selectedReqIds.includes(t.id));
-        if (selRam.length > 0) {
-          const userMax = Math.max(...selRam.map(t => parseValue(t.label)));
-          const gRam = groupedTemplates.ram.filter(t => gameReqs.includes(t.id));
-          if (gRam.length > 0) {
-            const gMin = Math.min(...gRam.map(t => parseValue(t.label)));
-            if (gMin > userMax) return false;
-          } else if (onlyWithRequirements) return false;
+      // Filter Logic for RAM (Single Selection)
+      const selectedRamTemplate = groupedTemplates.ram.find(t => selectedReqIds.includes(t.id));
+      if (selectedRamTemplate) {
+        const userCapacity = parseValue(selectedRamTemplate.label);
+        const gRamTags = groupedTemplates.ram.filter(t => gameReqs.includes(t.id));
+        if (gRamTags.length > 0) {
+          // Find the requirement of the game. If it has multiple, we assume the highest one is the minimum required.
+          // Rule: Show games where (Game Requirement <= User Selection)
+          const gameReqValue = Math.max(...gRamTags.map(t => parseValue(t.label)));
+          if (gameReqValue > userCapacity) return false;
+        } else if (onlyWithRequirements) {
+          return false;
         }
-
-        // VGA Compatibility
-        const selVga = groupedTemplates.vga.filter(t => selectedReqIds.includes(t.id));
-        if (selVga.length > 0) {
-          const userMax = Math.max(...selVga.map(t => parseValue(t.label)));
-          const gVga = groupedTemplates.vga.filter(t => gameReqs.includes(t.id));
-          if (gVga.length > 0) {
-            const gMin = Math.min(...gVga.map(t => parseValue(t.label)));
-            if (userMax > 0 && gMin > 0 && gMin > userMax) return false;
-            if (gMin === 0 && !selVga.some(t => gameReqs.includes(t.id))) return false;
-          } else if (onlyWithRequirements) return false;
-        }
-
-        // Misc Features
-        const selOther = selectedReqIds.filter(id => groupedTemplates.others.some(t => t.id === id));
-        if (selOther.length > 0 && !selOther.some(id => gameReqs.includes(id))) return false;
       }
+
+      // Filter Logic for VGA (Single Selection)
+      const selectedVgaTemplate = groupedTemplates.vga.find(t => selectedReqIds.includes(t.id));
+      if (selectedVgaTemplate) {
+        const userCapacity = parseValue(selectedVgaTemplate.label);
+        const gVgaTags = groupedTemplates.vga.filter(t => gameReqs.includes(t.id));
+        if (gVgaTags.length > 0) {
+          const gameReqValue = Math.max(...gVgaTags.map(t => parseValue(t.label)));
+          if (gameReqValue > userCapacity) return false;
+        } else if (onlyWithRequirements) {
+          return false;
+        }
+      }
+
+      // Filter Logic for Others (Multiple Selection / OR Logic)
+      const selOtherIds = selectedReqIds.filter(id => groupedTemplates.others.some(t => t.id === id));
+      if (selOtherIds.length > 0) {
+        if (!selOtherIds.some(id => gameReqs.includes(id))) return false;
+      }
+
       return true;
     });
   }, [games, searchTerm, selectedReqIds, onlyWithRequirements, groupedTemplates]);
@@ -128,17 +134,48 @@ const App: React.FC = () => {
     return [...ramVgaTemplates, ...miscTemplates];
   }, [ramVgaTemplates, miscTemplates]);
 
+  const handleToggleTag = (tagId: string, category: 'ram' | 'vga' | 'others') => {
+    setSelectedReqIds(prev => {
+      if (category === 'ram' || category === 'vga') {
+        // Find if any tag from this category is already selected
+        const categoryTags = groupedTemplates[category].map(t => t.id);
+        const filtered = prev.filter(id => !categoryTags.includes(id));
+        
+        // If the clicked tag was already selected, the filtered list is enough (deselect)
+        // If it wasn't, add it (switch selection)
+        if (prev.includes(tagId)) {
+          return filtered;
+        } else {
+          return [...filtered, tagId];
+        }
+      } else {
+        // Default behavior for others: Toggle multiple
+        return prev.includes(tagId) ? prev.filter(x => x !== tagId) : [...prev, tagId];
+      }
+    });
+  };
+
   const FilterPanel = () => (
     <div className="space-y-8">
       <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
-        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em]">Compatibility</h3>
-        {selectedReqIds.length > 0 && <button onClick={() => setSelectedReqIds([])} className="text-[10px] text-indigo-400 font-bold">Reset</button>}
+        <div className="flex flex-col">
+          <h3 className="text-xs font-black text-zinc-400 uppercase tracking-[0.2em]">Compatibility</h3>
+          <p className="text-[9px] text-zinc-600 font-medium mt-1">Select your hardware capacity</p>
+        </div>
+        {selectedReqIds.length > 0 && (
+          <button 
+            onClick={() => setSelectedReqIds([])} 
+            className="text-[10px] text-indigo-400 font-bold hover:text-indigo-300 transition-colors"
+          >
+            Reset
+          </button>
+        )}
       </div>
       <div className="space-y-6">
         {[
-          { title: "Memory (RAM)", tags: groupedTemplates.ram, color: "bg-indigo-500", suffix: "GB" },
-          { title: "Graphics (VGA)", tags: groupedTemplates.vga, color: "bg-emerald-500", suffix: "GB" },
-          { title: "Features", tags: groupedTemplates.others, color: "bg-amber-500", suffix: "" }
+          { title: "Memory (RAM)", category: 'ram' as const, tags: groupedTemplates.ram, color: "bg-indigo-500", suffix: "GB" },
+          { title: "Graphics (VGA)", category: 'vga' as const, tags: groupedTemplates.vga, color: "bg-emerald-500", suffix: "GB" },
+          { title: "Features", category: 'others' as const, tags: groupedTemplates.others, color: "bg-amber-500", suffix: "" }
         ].map(s => (
           <div key={s.title} className="space-y-3">
             <h4 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2">
@@ -148,8 +185,12 @@ const App: React.FC = () => {
               {s.tags.map(t => (
                 <button
                   key={t.id}
-                  onClick={() => setSelectedReqIds(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${selectedReqIds.includes(t.id) ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300'}`}
+                  onClick={() => handleToggleTag(t.id, s.category)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 ${
+                    selectedReqIds.includes(t.id) 
+                      ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-400/30' 
+                      : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                  }`}
                 >
                   {t.label}{s.suffix}
                 </button>

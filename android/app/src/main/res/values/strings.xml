@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Steamvault</string>
+    <string name="title_activity_main">Steamvault</string>
+    <string name="package_name">com.nextgenware.steamvault</string>
+    <string name="custom_url_scheme">com.nextgenware.steamvault</string>
+</resources>

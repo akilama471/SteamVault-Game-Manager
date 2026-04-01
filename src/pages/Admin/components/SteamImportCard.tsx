@@ -40,7 +40,7 @@ const SteamImportCard: React.FC<SteamImportCardProps> = ({
         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
           Search by Name
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <input
             type="text"
             value={searchQuery}
@@ -59,7 +59,7 @@ const SteamImportCard: React.FC<SteamImportCardProps> = ({
         <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
           Import by AppID
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <input
             type="text"
             value={steamIdInput}

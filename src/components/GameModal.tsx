@@ -10,19 +10,66 @@ interface GameModalProps {
 
 export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }) => {
   const [isReady, setIsReady] = useState(false);
+  const [selectedScreenshotIndex, setSelectedScreenshotIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (game) {
       setIsReady(false);
+      setSelectedScreenshotIndex(null);
       // Brief delay to show skeleton and improve perceived performance
       const timer = setTimeout(() => setIsReady(true), 600);
       return () => clearTimeout(timer);
     }
   }, [game]);
 
+  useEffect(() => {
+    if (selectedScreenshotIndex === null || !game?.screenshots?.length) return;
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSelectedScreenshotIndex(null);
+      }
+
+      if (event.key === 'ArrowRight') {
+        setSelectedScreenshotIndex((current) => {
+          if (current === null) return current;
+          return (current + 1) % game.screenshots.length;
+        });
+      }
+
+      if (event.key === 'ArrowLeft') {
+        setSelectedScreenshotIndex((current) => {
+          if (current === null) return current;
+          return (current - 1 + game.screenshots.length) % game.screenshots.length;
+        });
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [game?.screenshots, selectedScreenshotIndex]);
+
   if (!game) return null;
 
   const activeRequirements = templates.filter(t => game.requirementIds?.includes(t.id));
+  const selectedScreenshot =
+    selectedScreenshotIndex !== null ? game.screenshots?.[selectedScreenshotIndex] ?? null : null;
+
+  const showNextScreenshot = () => {
+    if (!game.screenshots?.length) return;
+    setSelectedScreenshotIndex((current) => {
+      if (current === null) return 0;
+      return (current + 1) % game.screenshots.length;
+    });
+  };
+
+  const showPreviousScreenshot = () => {
+    if (!game.screenshots?.length) return;
+    setSelectedScreenshotIndex((current) => {
+      if (current === null) return game.screenshots.length - 1;
+      return (current - 1 + game.screenshots.length) % game.screenshots.length;
+    });
+  };
 
   const Skeleton = ({ className }: { className: string }) => (
     <div className={`bg-zinc-800/50 animate-pulse rounded-lg ${className}`} />
@@ -46,7 +93,7 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
       <div className="bg-zinc-900 sm:border sm:border-zinc-800 sm:rounded-3xl w-full max-w-5xl h-full sm:h-auto sm:max-h-[95vh] overflow-y-auto shadow-2xl custom-scrollbar relative">
         
         {/* Header Hero */}
-        <div className="relative h-56 md:h-96 overflow-hidden flex-shrink-0">
+        <div className="sticky top-0 z-40 relative h-56 md:h-96 overflow-hidden flex-shrink-0">
           <img 
             src={game.thumbnail} 
             alt={game.name} 
@@ -78,7 +125,7 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
                 <h2 className="text-2xl md:text-5xl font-black text-white tracking-tighter drop-shadow-2xl line-clamp-2">{game.name}</h2>
                 <div className="flex flex-wrap items-center gap-2 md:gap-3 mt-4">
                   <div className="px-3 py-1 md:px-4 md:py-1.5 bg-indigo-600 text-white rounded-full text-xs md:text-sm font-black shadow-xl shadow-indigo-600/20">
-                    {game.price}
+                    Rs. {game.price}
                   </div>
                   {activeRequirements.length > 0 && (
                     <div className="px-3 py-1 md:px-4 md:py-1.5 bg-amber-500 text-zinc-900 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest shadow-xl shadow-amber-500/20">
@@ -155,7 +202,7 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
               </div>
             </div>
 
-            {/* ABOUT SECTION */}
+            {/* ABOUT SECTION 
             <div className="space-y-4 md:space-y-6">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-500/10 rounded-lg hidden sm:block">
@@ -177,7 +224,7 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
                   dangerouslySetInnerHTML={{ __html: game.description }} 
                 />
               )}
-            </div>
+            </div>*/}
           </div>
 
           {/* SIDEBAR */}
@@ -201,11 +248,6 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
                     title="Minimum Requirements" 
                     html={game.minRequirements} 
                     colorClass="text-indigo-400"
-                  />
-                  <RequirementBlock 
-                    title="Recommended Requirements" 
-                    html={game.recommendedRequirements} 
-                    colorClass="text-emerald-400"
                   />
                   
                   {activeRequirements.length > 0 && (
@@ -244,10 +286,116 @@ export const GameModal: React.FC<GameModalProps> = ({ game, templates, onClose }
             </div>
           </div>
         </div>
+        {game.screenshots?.length > 0 && (
+          <div className="space-y-8">
+            <div className="space-y-3">
+              <h4 className="text-indigo-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0018 4H2a2 2 0 00.003 4z" /></svg>
+                Screenshots
+              </h4>
+              <p className="text-zinc-400 text-sm md:text-base leading-relaxed prose prose-invert max-w-none prose-p:my-2 prose-headings:text-white">
+                {game.screenshots.length} screenshots
+              </p>
+            </div> 
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {game.screenshots.map((s, index) => (      
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSelectedScreenshotIndex(index)}
+                  className="group relative overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-zinc-900"
+                  aria-label={`View screenshot from ${game.name}`}
+                >
+                  <img
+                    src={s}
+                    alt={game.name}
+                    className="w-full h-full object-cover rounded-lg transition-transform duration-300 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                  <div className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 3h6m0 0v6m0-6l-7 7M9 21H3m0 0v-6m0 6l7-7" />
+                    </svg>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* BOTTOM SPACER */}
         <div className="h-12 sm:h-0" />
       </div>
+
+      {selectedScreenshot && (
+        <div
+            className="fixed inset-0 z-[60] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 md:p-8"
+            onClick={() => setSelectedScreenshotIndex(null)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${game.name} screenshot preview`}
+          >
+          <button
+              type="button"
+              onClick={() => setSelectedScreenshotIndex(null)}
+              className="absolute top-4 right-4 md:top-6 md:right-6 p-2 md:p-3 bg-black/60 hover:bg-black/90 text-white rounded-full transition-all hover:scale-110 active:scale-90 border border-white/10"
+              aria-label="Close screenshot preview"
+            >
+            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+            {game.screenshots.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showPreviousScreenshot();
+                }}
+                className="absolute left-3 md:left-6 p-2 md:p-3 bg-black/60 hover:bg-black/90 text-white rounded-full transition-all hover:scale-110 active:scale-90 border border-white/10"
+                aria-label="Previous screenshot"
+              >
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+
+            <div
+              className="max-w-6xl max-h-full w-full flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+              src={selectedScreenshot}
+              alt={`${game.name} screenshot preview`}
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl"
+              />
+            </div>
+
+            {game.screenshots.length > 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  showNextScreenshot();
+                }}
+                className="absolute right-3 md:right-6 p-2 md:p-3 bg-black/60 hover:bg-black/90 text-white rounded-full transition-all hover:scale-110 active:scale-90 border border-white/10"
+                aria-label="Next screenshot"
+              >
+                <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+
+            {selectedScreenshotIndex !== null && game.screenshots.length > 1 && (
+              <div className="absolute bottom-4 md:bottom-6 px-3 py-1.5 bg-black/60 text-white rounded-full text-xs md:text-sm border border-white/10">
+                {selectedScreenshotIndex + 1} / {game.screenshots.length}
+              </div>
+            )}
+          </div>
+        )}
     </div>
   );
 };

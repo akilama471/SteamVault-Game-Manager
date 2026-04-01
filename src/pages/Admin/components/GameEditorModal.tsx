@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { Game, RamVgaTemplate, MiscTemplate } from "@/types";
 import { Button } from "@/components/Button";
+import { extractRequirements } from "@/services/systemRequirementService";
 
 type GroupedTemplates = {
   ram: RamVgaTemplate[];
@@ -34,6 +35,66 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
 }) => {
   if (!open) return null;
 
+  const parsedRequirements = useMemo(
+    () => extractRequirements(editingGame.minRequirements || ""),
+    [editingGame.minRequirements]
+  );
+
+  const requirementFields: Array<{
+    key: keyof ReturnType<typeof extractRequirements>;
+    label: string;
+    multiline?: boolean;
+  }> = [
+    { key: "Minimum", label: "Minimum" },
+    { key: "OS", label: "OS" },
+    { key: "Processor", label: "Processor" },
+    { key: "Memory", label: "Memory" },
+    { key: "Graphics", label: "Graphics" },
+    { key: "DirectX", label: "DirectX" },
+    { key: "Network", label: "Network" },
+    { key: "Storage", label: "Storage" },
+    { key: "Notes", label: "Notes", multiline: true },
+  ];
+
+  const buildRequirementsHtml = (requirements: ReturnType<typeof extractRequirements>) => {
+    const escapeHtml = (value: string) =>
+      value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
+
+    const items = [
+      ["OS", requirements.OS],
+      ["Processor", requirements.Processor],
+      ["Memory", requirements.Memory],
+      ["Graphics", requirements.Graphics],
+      ["DirectX", requirements.DirectX],
+      ["Network", requirements.Network],
+      ["Storage", requirements.Storage],
+      ["Additional Notes", requirements.Notes],
+    ]
+      .filter(([, value]) => value?.trim())
+      .map(
+        ([label, value]) => `<li><strong>${label}:</strong> ${escapeHtml((value || "").trim())}</li>`
+      )
+      .join("");
+
+    const minimum = requirements.Minimum?.trim();
+
+    if (!minimum && !items) return "";
+
+    return `${minimum ? `<strong>${escapeHtml(minimum)}:</strong>` : ""}${items ? `<ul>${items}</ul>` : ""}`;
+  };
+
+  const handleRequirementChange = (
+    field: keyof ReturnType<typeof extractRequirements>,
+    value: string
+  ) => {
+    onChangeField("minRequirements", buildRequirementsHtml({ ...parsedRequirements, [field]: value }));
+  };
+
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-4xl shadow-2xl relative my-10 flex flex-col max-h-[90vh]">
@@ -41,7 +102,7 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
           <h3 className="text-xl font-bold truncate">
             {isFetching ? "Fetching Steam Data..." : editingGame.name || "New Game"}
           </h3>
-
+ 
           <button onClick={onClose} className="text-zinc-500 hover:text-white p-2" type="button">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
@@ -126,11 +187,29 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
               <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
                 Min Requirements (HTML)
               </label>
-              <textarea
-                value={editingGame.minRequirements || ""}
-                onChange={(e) => onChangeField("minRequirements", e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-xs h-32 font-mono"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {requirementFields.map(({ key, label, multiline }) => (
+                  <div key={key} className={multiline ? "space-y-2 md:col-span-2" : "space-y-2"}>
+                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">
+                      {label}
+                    </label>
+                    {multiline ? (
+                      <textarea
+                        value={parsedRequirements[key] || ""}
+                        onChange={(e) => handleRequirementChange(key, e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm h-24"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={parsedRequirements[key] || ""}
+                        onChange={(e) => handleRequirementChange(key, e.target.value)}
+                        className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-sm"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="space-y-2">

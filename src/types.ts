@@ -23,6 +23,7 @@ export interface Game {
   minRequirements: string;
   recommendedRequirements: string;
   trailerUrl: string;
+  screenshots: string[];
   releaseDate?: string;
   requirementIds?: string[]; // IDs linking to RequirementTemplate
 }
@@ -36,3 +37,4 @@ export enum ViewMode {
   VISITOR = 'VISITOR',
   ADMIN = 'ADMIN'
 }
+

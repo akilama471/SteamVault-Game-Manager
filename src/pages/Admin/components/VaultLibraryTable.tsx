@@ -27,9 +27,9 @@ const VaultLibraryTable: React.FC<VaultLibraryTableProps> = ({
   return (
     <section className="bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden shadow-xl">
       <div className="p-6 border-b border-zinc-800 flex justify-between items-center">
-        <h3 className="font-bold text-white uppercase">Vault Library</h3>
+        <h3 className="font-bold text-white uppercase">Library</h3>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2">
           <input
             type="text"
             placeholder="Search..."

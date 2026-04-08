@@ -17,6 +17,8 @@ import {
   cloudSaveRequirements,
   cloudDeleteTemplate,
   cloudDeleteRequirements,
+  cloudSaveCategory,
+  cloudDeleteCategory,
 } from "@/firebase/firebase";
 
 import { useAuthUser } from "@/hooks/useAuthUser";
@@ -47,6 +49,8 @@ const App: React.FC = () => {
     setRamVgaTemplates,
     miscTemplates,
     setMiscTemplates,
+    categories,
+    setCategories,
   } = useSteamVaultData();
 
   // -----------------------
@@ -57,11 +61,14 @@ const App: React.FC = () => {
     setSearchTerm,
     selectedReqIds,
     setSelectedReqIds,
+    selectedCategoryIds,
+    setSelectedCategoryIds,
     groupedTemplates,
     filteredGames,
     allTemplates,
     handleToggleTag,
-  } = useGameFilters(games, ramVgaTemplates, miscTemplates);
+    handleToggleCategory,
+  } = useGameFilters(games, ramVgaTemplates, miscTemplates, categories);
 
   const isVisitor = viewMode === ViewMode.VISITOR;
 
@@ -73,9 +80,15 @@ const App: React.FC = () => {
           open={isFilterDrawerOpen}
           onClose={() => setIsFilterDrawerOpen(false)}
           groupedTemplates={groupedTemplates}
+          categories={categories}
           selectedReqIds={selectedReqIds}
-          onResetSelected={() => setSelectedReqIds([])}
+          selectedCategoryIds={selectedCategoryIds}
+          onResetSelected={() => {
+            setSelectedReqIds([]);
+            setSelectedCategoryIds([]);
+          }}
           onToggleTag={handleToggleTag}
+          onToggleCategory={handleToggleCategory}
         />
       )}
 
@@ -104,9 +117,15 @@ const App: React.FC = () => {
           <VisitorPage
             filteredGames={filteredGames}
             groupedTemplates={groupedTemplates}
+            categories={categories}
             selectedReqIds={selectedReqIds}
-            onResetFilters={() => setSelectedReqIds([])}
+            selectedCategoryIds={selectedCategoryIds}
+            onResetFilters={() => {
+              setSelectedReqIds([]);
+              setSelectedCategoryIds([]);
+            }}
             onToggleTag={handleToggleTag}
+            onToggleCategory={handleToggleCategory}
             onSelectGame={setSelectedGame}
           />
         ) : (
@@ -154,6 +173,16 @@ const App: React.FC = () => {
                 );
                 await cloudDeleteRequirements(id);
               }}
+              categories={categories}
+              onAddCategory={async (label) => {
+                const n = { id: Date.now().toString(), label };
+                setCategories((prev) => [...prev, n]);
+                await cloudSaveCategory(n);
+              }}
+              onDeleteCategory={async (id) => {
+                setCategories((prev) => prev.filter((x) => x.id !== id));
+                await cloudDeleteCategory(id);
+              }}
             />
           ) : (
             <LoginForm />
@@ -168,6 +197,7 @@ const App: React.FC = () => {
       <GameModal
         game={selectedGame}
         templates={allTemplates}
+        categories={categories}
         onClose={() => setSelectedGame(null)}
       />
     </div>

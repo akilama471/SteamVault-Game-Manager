@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import type { Game, RamVgaTemplate, MiscTemplate } from "@/types";
+import type { Game, RamVgaTemplate, MiscTemplate, GameCategory } from "@/types";
 import { Button } from "@/components/Button";
 import { extractRequirements } from "@/services/systemRequirementService";
 
@@ -15,9 +15,11 @@ type GameEditorModalProps = {
 
   editingGame: Partial<Game>;
   grouped: GroupedTemplates;
+  categories: GameCategory[];
 
   onClose: () => void;
   onToggleTag: (id: string) => void;
+  onToggleCategory: (id: string) => void;
 
   onChangeField: (field: keyof Game, value: string) => void;
   onSave: () => void;
@@ -28,8 +30,10 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
   isFetching,
   editingGame,
   grouped,
+  categories,
   onClose,
   onToggleTag,
+  onToggleCategory,
   onChangeField,
   onSave,
 }) => {
@@ -99,11 +103,24 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md overflow-y-auto">
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl w-full max-w-4xl shadow-2xl relative my-10 flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-zinc-800 flex justify-between items-center sticky top-0 bg-zinc-900 z-10 rounded-t-3xl">
-          <h3 className="text-xl font-bold truncate">
-            {isFetching ? "Fetching Steam Data..." : editingGame.name || "New Game"}
-          </h3>
+          <div className="flex items-center gap-3 min-w-0">
+            <h3 className="text-xl font-bold truncate">
+              {isFetching ? "Fetching Game Data..." : editingGame.name || "New Game"}
+            </h3>
+            {/* Store source badge */}
+            {editingGame.store === "steam" && (
+              <span className="flex-shrink-0 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/20">
+                Steam
+              </span>
+            )}
+            {editingGame.store === "manual" && (
+              <span className="flex-shrink-0 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded-full bg-zinc-500/15 text-zinc-400 border border-zinc-500/20">
+                Manual
+              </span>
+            )}
+          </div>
  
-          <button onClick={onClose} className="text-zinc-500 hover:text-white p-2" type="button">
+          <button onClick={onClose} className="text-zinc-500 hover:text-white p-2 flex-shrink-0" type="button">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -138,6 +155,31 @@ const GameEditorModal: React.FC<GameEditorModalProps> = ({
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Categories Section */}
+          <div className="bg-zinc-950/40 p-6 rounded-2xl border border-zinc-800/50 space-y-3">
+             <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Global Categories</span>
+             {categories && categories.length > 0 ? (
+               <div className="flex flex-wrap gap-2">
+                 {categories.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => onToggleCategory(cat.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                        editingGame.categoryIds?.includes(cat.id)
+                          ? "bg-blue-600 border-blue-500 text-white"
+                          : "bg-zinc-900 border-zinc-800 text-zinc-500"
+                      }`}
+                      type="button"
+                    >
+                      {cat.label}
+                    </button>
+                 ))}
+               </div>
+             ) : (
+               <div className="text-zinc-500 text-xs italic">No generic categories available in the vault.</div>
+             )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

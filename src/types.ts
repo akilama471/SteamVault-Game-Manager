@@ -13,9 +13,17 @@ export interface MiscTemplate {
 
 export type RequirementTemplate = RamVgaTemplate | MiscTemplate;
 
+export type GameStore = 'steam' | 'manual';
+
+export interface GameCategory {
+  id: string;
+  label: string;
+}
+
 export interface Game {
   id: string;
   steamAppId?: string;
+  store?: GameStore;
   name: string;
   thumbnail: string;
   price: string;
@@ -26,6 +34,7 @@ export interface Game {
   screenshots: string[];
   releaseDate?: string;
   requirementIds?: string[]; // IDs linking to RequirementTemplate
+  categoryIds?: string[]; // IDs linking to GameCategory
 }
 
 export interface SteamSearchResult {

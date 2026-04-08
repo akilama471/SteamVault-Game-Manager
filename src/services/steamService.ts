@@ -1,14 +1,14 @@
 import { Game, SteamSearchResult } from "../types";
 
-// Correct format for corsproxy.io requires the 'url=' parameter for reliable fetching
-const PROXY_URL = "https://corsproxy.io/?url=";
+// Correct format for corsproxy.io requires appending the unencoded URL
+const PROXY_URL = "https://corsproxy.io/?";
 
 export const searchSteamGames = async (query: string): Promise<SteamSearchResult[]> => {
   try {
     const steamSearchUrl = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(query)}&l=english&cc=US`;
 
-    // We encode the full Steam URL to ensure it is correctly passed as a parameter to the proxy
-    const response = await fetch(`${PROXY_URL}${encodeURIComponent(steamSearchUrl)}`);
+    // We append the full Steam URL directly without encoding
+    const response = await fetch(`${PROXY_URL}${steamSearchUrl}`);
 
     if (!response.ok) {
       console.warn(`Steam Proxy Search Error: ${response.status} ${response.statusText}`);
@@ -33,7 +33,7 @@ export const searchSteamGames = async (query: string): Promise<SteamSearchResult
 export const getSteamGameDetails = async (appId: string): Promise<Partial<Game>> => {
   try {
     const steamDetailsUrl = `https://store.steampowered.com/api/appdetails?appids=${appId}&cc=us&l=en`;
-    const response = await fetch(`${PROXY_URL}${encodeURIComponent(steamDetailsUrl)}`);
+    const response = await fetch(`${PROXY_URL}${steamDetailsUrl}`);
 
     if (!response.ok) {
       throw new Error(`Steam Proxy Details Error: ${response.status} ${response.statusText}`);

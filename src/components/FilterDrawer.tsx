@@ -13,23 +13,34 @@ type GroupedTemplates = {
   others: TemplateItem[];
 };
 
+type GameCategory = {
+  id: string;
+  label: string;
+};
+
 type FilterDrawerProps = {
   open: boolean;
   onClose: () => void;
 
   groupedTemplates: GroupedTemplates;
+  categories: GameCategory[];
   selectedReqIds: string[];
+  selectedCategoryIds: string[];
   onResetSelected: () => void;
   onToggleTag: (tagId: string, category: "ram" | "vga" | "others") => void;
+  onToggleCategory: (catId: string) => void;
 };
 
 const FilterDrawer: React.FC<FilterDrawerProps> = ({
   open,
   onClose,
   groupedTemplates,
+  categories,
   selectedReqIds,
+  selectedCategoryIds,
   onResetSelected,
   onToggleTag,
+  onToggleCategory,
 }) => {
   return (
     <div
@@ -60,9 +71,12 @@ const FilterDrawer: React.FC<FilterDrawerProps> = ({
           <div className="flex-1 overflow-y-auto">
             <FilterPanel
               groupedTemplates={groupedTemplates}
+              categories={categories}
               selectedReqIds={selectedReqIds}
+              selectedCategoryIds={selectedCategoryIds}
               onReset={onResetSelected}
               onToggleTag={onToggleTag}
+              onToggleCategory={onToggleCategory}
             />
           </div>
         </div>

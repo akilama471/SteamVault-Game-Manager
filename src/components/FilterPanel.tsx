@@ -12,18 +12,29 @@ type GroupedTemplates = {
   others: TemplateItem[];
 };
 
+type GameCategory = {
+  id: string;
+  label: string;
+};
+
 type FilterPanelProps = {
   groupedTemplates: GroupedTemplates;
+  categories: GameCategory[];
   selectedReqIds: string[];
+  selectedCategoryIds: string[];
   onReset: () => void;
   onToggleTag: (tagId: string, category: "ram" | "vga" | "others") => void;
+  onToggleCategory: (catId: string) => void;
 };
 
 const FilterPanel: React.FC<FilterPanelProps> = ({
   groupedTemplates,
+  categories,
   selectedReqIds,
+  selectedCategoryIds,
   onReset,
   onToggleTag,
+  onToggleCategory,
 }) => {
   const sections = [
     { title: "Memory (RAM)", category: "ram" as const, tags: groupedTemplates.ram, dot: "bg-indigo-500", suffix: "GB" },
@@ -39,7 +50,7 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
           <p className="text-[9px] text-zinc-600 font-medium mt-1">Select your hardware capacity</p>
         </div>
 
-        {selectedReqIds.length > 0 && (
+        {(selectedReqIds.length > 0 || selectedCategoryIds.length > 0) && (
           <button
             onClick={onReset}
             className="text-[10px] text-indigo-400 font-bold hover:text-indigo-300 transition-colors"
@@ -51,6 +62,33 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
       </div>
 
       <div className="space-y-6">
+        {categories && categories.length > 0 && (
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-black text-blue-400 uppercase flex items-center gap-2">
+              <span className="w-1 h-1 rounded-full bg-blue-500" /> Game Categories
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((c) => {
+                const selected = selectedCategoryIds.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => onToggleCategory(c.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all duration-200 ${
+                      selected
+                        ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20 ring-1 ring-blue-400/30"
+                        : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700"
+                    }`}
+                    type="button"
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {sections.map((s) => (
           <div key={s.title} className="space-y-3">
             <h4 className="text-[10px] font-black text-zinc-500 uppercase flex items-center gap-2">

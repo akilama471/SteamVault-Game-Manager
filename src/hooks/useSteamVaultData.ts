@@ -5,6 +5,7 @@ import {
   cloudFetchGames,
   cloudFetchTemplates,
   cloudFetchRequirements,
+  cloudFetchCategories,
 } from "@/firebase/firebase";
 
 export function useSteamVaultData() {
@@ -12,16 +13,18 @@ export function useSteamVaultData() {
   const [games, setGames] = useState<Game[]>([]);
   const [ramVgaTemplates, setRamVgaTemplates] = useState<RamVgaTemplate[]>([]);
   const [miscTemplates, setMiscTemplates] = useState<MiscTemplate[]>([]);
+  const [categories, setCategories] = useState<{id: string, label: string}[]>([]);
 
   useEffect(() => {
     const load = async () => {
       setIsLoading(true);
 
       if (isFirebaseConfigured) {
-        const [gamesRes, templatesRes, reqRes] = await Promise.allSettled([
+        const [gamesRes, templatesRes, reqRes, categoriesRes] = await Promise.allSettled([
           cloudFetchGames(),
           cloudFetchTemplates(),
           cloudFetchRequirements(),
+          cloudFetchCategories(),
         ]);
 
         if (gamesRes.status === "fulfilled" && gamesRes.value) {
@@ -36,6 +39,10 @@ export function useSteamVaultData() {
         // Keep as-is to avoid breaking UI.
         if (reqRes.status === "fulfilled" && Array.isArray(reqRes.value)) {
           setMiscTemplates(reqRes.value as MiscTemplate[]);
+        }
+
+        if (categoriesRes.status === "fulfilled" && Array.isArray(categoriesRes.value)) {
+          setCategories(categoriesRes.value as {id: string, label: string}[]);
         }
       }
 
@@ -56,5 +63,7 @@ export function useSteamVaultData() {
     setRamVgaTemplates,
     miscTemplates,
     setMiscTemplates,
+    categories,
+    setCategories,
   };
 }

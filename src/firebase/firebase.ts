@@ -29,6 +29,7 @@ let auth: any = null;
 let gamesCollection: any = null;
 let templatesCollection: any = null;
 let requirementsCollection: any = null;
+let categoriesCollection: any = null;
 
 if (isFirebaseConfigured) {
   try {
@@ -38,6 +39,7 @@ if (isFirebaseConfigured) {
     gamesCollection = collection(db, "games");
     templatesCollection = collection(db, "templates");
     requirementsCollection = collection(db, "requirements");
+    categoriesCollection = collection(db, "categories");
   } catch (err) {
     console.error("Firebase initialization failed:", err);
   }
@@ -149,6 +151,37 @@ export const cloudFetchRequirements = async () => {
   if (!isFirebaseConfigured || !requirementsCollection) return null;
   try {
     const snapshot = await getDocs(requirementsCollection);
+    return snapshot.docs.map(doc => doc.data());
+  } catch (err: any) {
+    throw err;
+  }
+};
+
+// Firestore Helpers - Categories
+export const cloudSaveCategory = async (category: any) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await setDoc(doc(db, "categories", category.id), category);
+  } catch (err: any) {
+    console.error("Cloud Save Category Error:", err);
+    throw err;
+  }
+};
+
+export const cloudDeleteCategory = async (id: string) => {
+  if (!isFirebaseConfigured || !db) return;
+  try {
+    await deleteDoc(doc(db, "categories", id));
+  } catch (err: any) {
+    console.error("Cloud Delete Category Error:", err);
+    throw err;
+  }
+};
+
+export const cloudFetchCategories = async () => {
+  if (!isFirebaseConfigured || !categoriesCollection) return null;
+  try {
+    const snapshot = await getDocs(categoriesCollection);
     return snapshot.docs.map(doc => doc.data());
   } catch (err: any) {
     throw err;

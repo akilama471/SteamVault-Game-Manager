@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
-import type { Game, RamVgaTemplate, MiscTemplate, RequirementTemplate } from "@/types";
+import type { Game, RamVgaTemplate, MiscTemplate, RequirementTemplate, GameCategory } from "@/types";
 
 export function useGameFilters(
   games: Game[],
   ramVgaTemplates: RamVgaTemplate[],
-  miscTemplates: MiscTemplate[]
+  miscTemplates: MiscTemplate[],
+  categories: GameCategory[]
 ) {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedReqIds, setSelectedReqIds] = useState<string[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [onlyWithRequirements, setOnlyWithRequirements] = useState(false);
 
   const parseValue = (label: string | number): number => {
@@ -76,10 +78,16 @@ export function useGameFilters(
       if (selOtherIds.length > 0) {
         if (!selOtherIds.some((id) => gameReqs.includes(id))) return false;
       }
+      
+      // Categories (multi select OR logic)
+      if (selectedCategoryIds.length > 0) {
+        const gameCatIds = g.categoryIds || [];
+        if (!selectedCategoryIds.some((id) => gameCatIds.includes(id))) return false;
+      }
 
       return true;
     });
-  }, [games, searchTerm, selectedReqIds, onlyWithRequirements, groupedTemplates]);
+  }, [games, searchTerm, selectedReqIds, selectedCategoryIds, onlyWithRequirements, groupedTemplates]);
 
   const allTemplates: RequirementTemplate[] = useMemo(
     () => [...ramVgaTemplates, ...miscTemplates],
@@ -97,16 +105,25 @@ export function useGameFilters(
     });
   };
 
+  const handleToggleCategory = (catId: string) => {
+    setSelectedCategoryIds(prev => 
+      prev.includes(catId) ? prev.filter(x => x !== catId) : [...prev, catId]
+    );
+  };
+
   return {
     searchTerm,
     setSearchTerm,
     selectedReqIds,
     setSelectedReqIds,
+    selectedCategoryIds,
+    setSelectedCategoryIds,
     onlyWithRequirements,
     setOnlyWithRequirements,
     groupedTemplates,
     filteredGames,
     allTemplates,
     handleToggleTag,
+    handleToggleCategory,
   };
 }
